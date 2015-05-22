@@ -16,9 +16,9 @@ public class Message implements Serializable{
         this.pubKey = pubKey;
     }
 
-    public Message(Certificate ..., SecretKey sKey) {
+    /*public Message(Certificate ..., SecretKey sKey) {
         this.sKey = sKey;
-    }
+    }*/
 
     public Message(String message, long timestamp) {
         this.message = message;

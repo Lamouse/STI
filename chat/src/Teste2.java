@@ -1,78 +1,124 @@
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.security.KeyStore;
-import java.security.cert.CertificateFactory;
-import java.util.Enumeration;
+import java.io.FileWriter;
+import java.io.StringWriter;
+import java.security.Principal;
+import java.security.PrivateKey;
+import java.security.cert.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
-/**
- * Created by paulo on 21-05-2015.
- */
+import sun.security.x509.BasicConstraintsExtension;
+import sun.security.tools.keytool.CertAndKeyGen;
+import sun.security.x509.CertificateExtensions;
+import sun.security.x509.X500Name;
+import sun.security.x509.X509CertImpl;
+import sun.security.x509.X509CertInfo;
 
+import javax.xml.bind.DatatypeConverter;
 
+//Tested in jdk1.8.0_40
 public class Teste2 {
-    public static void main(String[] a) {
-        if (a.length<3) {
-            System.out.println("Usage:");
-            System.out.println("java JcaKeyStoreTest store sPass alias");
-            return;
-        }
-        String store = a[0];
-        String sPass = a[1];
-        String alias = a[2];
-        try {
-            test(store,sPass,alias);
-        } catch (Exception e) {
-            System.out.println("Exception: "+e);
-            return;
+
+    public static void main(String[] args){
+        try{
+            //Generate FAKE certificate just to test
+            CertAndKeyGen keyGen1=new CertAndKeyGen("RSA","SHA1WithRSA", null);
+            keyGen1.generate(1024);
+            PrivateKey fakePrivateKey=keyGen1.getPrivateKey();
+            X509Certificate fakeCertificate = keyGen1.getSelfCertificate(new X500Name("CN=ROOT"), (long) 365 * 24 * 60 * 60);
+
+            fakeCertificate   = createSignedCertificate(fakeCertificate,fakeCertificate,fakePrivateKey);
+
+
+            //Generate ROOT certificate
+            CertAndKeyGen keyGen=new CertAndKeyGen("RSA","SHA1WithRSA", null);
+            keyGen.generate(1024);
+            PrivateKey rootPrivateKey=keyGen.getPrivateKey();
+            X509Certificate rootCertificate = keyGen.getSelfCertificate(new X500Name("CN=ROOT"), (long) 365 * 24 * 60 * 60);
+
+            //Generate leaf certificate
+            CertAndKeyGen keyGen2=new CertAndKeyGen("RSA","SHA1WithRSA",null);
+            keyGen2.generate(1024);
+            PrivateKey topPrivateKey=keyGen2.getPrivateKey();
+            X509Certificate topCertificate = keyGen2.getSelfCertificate(new X500Name("CN=TOP"), (long) 365 * 24 * 60 * 60);
+
+            rootCertificate   = createSignedCertificate(rootCertificate,rootCertificate,rootPrivateKey);
+            topCertificate    = createSignedCertificate(topCertificate,rootCertificate,rootPrivateKey);
+
+            X509Certificate[] chain = new X509Certificate[2];
+            chain[0]=topCertificate;
+            chain[1]=rootCertificate;
+
+            if (topCertificate != null && rootCertificate != null)
+            {
+                FileWriter fw = new FileWriter("certificateClient.cer");
+                fw.write(certToString(rootCertificate));
+                fw.close();
+
+                ////
+                // Validate client certificate
+                ////
+
+                //Check the chain
+                CertificateFactory cf = CertificateFactory.getInstance("X.509");
+                List mylist = new ArrayList();
+                mylist.add(fakeCertificate);
+                CertPath cp = cf.generateCertPath(mylist);
+
+                TrustAnchor anchor = new TrustAnchor(rootCertificate, null);
+                PKIXParameters params = new PKIXParameters(Collections.singleton(anchor));
+                params.setRevocationEnabled(false);
+
+                CertPathValidator cpv = CertPathValidator.getInstance("PKIX");
+                PKIXCertPathValidatorResult pkixCertPathValidatorResult = (PKIXCertPathValidatorResult) cpv.validate(cp, params);
+
+                System.out.println("\n\n\n\n\n\n\n\n\n\n\n" + pkixCertPathValidatorResult);
+            }
+
+            // System.out.println(Arrays.toString(chain));
+        }catch(Exception ex){
+            ex.printStackTrace();
         }
     }
-    private static void test(String store, String sPass, String alias) throws Exception {
-        KeyStore ks = KeyStore.getInstance("JKS");
-        System.out.println();
-        System.out.println("KeyStore Object Info: ");
-        System.out.println("Type = " + ks.getType());
-        System.out.println("Provider = " + ks.getProvider());
-        System.out.println("toString = " + ks.toString());
-
-        FileInputStream fis = new FileInputStream(store);
-        ks.load(fis, sPass.toCharArray());
-        fis.close();
-        System.out.println();
-        System.out.println("KeyStore Content: ");
-        System.out.println("Size = " + ks.size());
-        Enumeration e = ks.aliases();
-        while (e.hasMoreElements()) {
-            String name = (String) e.nextElement();
-            System.out.print("   " + name + ": ");
-            if (ks.isKeyEntry(name)) System.out.println(" Key entry");
-            else System.out.println(" Certificate entry");
+    public static String certToString(X509Certificate cert) {
+        StringWriter sw = new StringWriter();
+        try {
+            sw.write("-----BEGIN CERTIFICATE-----\n");
+            sw.write(DatatypeConverter.printBase64Binary(cert.getEncoded()).replaceAll("(.{64})", "$1\n"));
+            sw.write("\n-----END CERTIFICATE-----\n");
+        } catch (CertificateEncodingException e) {
+            e.printStackTrace();
         }
+        return sw.toString();
+    }
 
-        java.security.cert.Certificate cert = ks.getCertificate(alias);
-        System.out.println();
-        System.out.println("Certificate Object Info: ");
-        System.out.println("Type = " + cert.getType());
-        System.out.println("toString = " + cert.toString());
+    private static X509Certificate createSignedCertificate(X509Certificate cetrificate,X509Certificate issuerCertificate,PrivateKey issuerPrivateKey){
+        try{
+            Principal issuer = issuerCertificate.getSubjectDN();
+            String issuerSigAlg = issuerCertificate.getSigAlgName();
 
-        FileOutputStream fos = new FileOutputStream(alias + ".crt");
-        byte[] certBytes = cert.getEncoded();
-        fos.write(certBytes);
-        fos.close();
+            System.out.println("Algorithm: " + issuerSigAlg);
 
-        CertificateFactory cf = CertificateFactory.getInstance("X.509");
-        System.out.println();
-        System.out.println("CertificateFactory Object Info: ");
-        System.out.println("Type = " + cf.getType());
-        System.out.println("Provider = " + cf.getProvider());
-        System.out.println("toString = " + cf.toString());
+            byte[] inCertBytes = cetrificate.getTBSCertificate();
+            X509CertInfo info = new X509CertInfo(inCertBytes);
+            info.set(X509CertInfo.ISSUER, (X500Name) issuer);
 
-        fis = new FileInputStream(alias + ".crt");
-        cert = cf.generateCertificate(fis);
-        ks.setCertificateEntry(alias + ks.size(), cert);
-        fis.close();
+            //No need to add the BasicContraint for leaf cert
+            if(!cetrificate.getSubjectDN().getName().equals("CN=TOP")){
+                CertificateExtensions exts=new CertificateExtensions();
+                BasicConstraintsExtension bce = new BasicConstraintsExtension(true, -1);
+                // exts.set(BasicConstraintsExtension.NAME,new BasicConstraintsExtension(false, bce.getExtensionValue()));
+                info.set(X509CertInfo.EXTENSIONS, exts);
+            }
 
-        fos = new FileOutputStream(store);
-        ks.store(fos, sPass.toCharArray());
-        fos.close();
+            X509CertImpl outCert = new X509CertImpl(info);
+            outCert.sign(issuerPrivateKey, issuerSigAlg);
+
+            return outCert;
+        }catch(Exception ex){
+            ex.printStackTrace();
+        }
+        return null;
     }
 }
