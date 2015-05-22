@@ -1,4 +1,6 @@
+import java.io.FileOutputStream;
 import java.io.FileWriter;
+import java.io.ObjectOutputStream;
 import java.io.StringWriter;
 import java.security.Principal;
 import java.security.PrivateKey;
@@ -37,6 +39,7 @@ public class Teste2 {
             PrivateKey rootPrivateKey=keyGen.getPrivateKey();
             X509Certificate rootCertificate = keyGen.getSelfCertificate(new X500Name("CN=ROOT"), (long) 365 * 24 * 60 * 60);
 
+
             //Generate leaf certificate
             CertAndKeyGen keyGen2=new CertAndKeyGen("RSA","SHA1WithRSA",null);
             keyGen2.generate(1024);
@@ -46,15 +49,19 @@ public class Teste2 {
             rootCertificate   = createSignedCertificate(rootCertificate,rootCertificate,rootPrivateKey);
             topCertificate    = createSignedCertificate(topCertificate,rootCertificate,rootPrivateKey);
 
-            X509Certificate[] chain = new X509Certificate[2];
-            chain[0]=topCertificate;
-            chain[1]=rootCertificate;
 
             if (topCertificate != null && rootCertificate != null)
             {
-                FileWriter fw = new FileWriter("certificateClient.cer");
-                fw.write(certToString(rootCertificate));
-                fw.close();
+                FileOutputStream fout = new FileOutputStream("rootCertificate.ser");
+                ObjectOutputStream oos = new ObjectOutputStream(fout);
+                oos.writeObject(rootCertificate);
+                oos.close();
+
+
+                fout = new FileOutputStream("rootPrivateKey.ser");
+                oos = new ObjectOutputStream(fout);
+                oos.writeObject(rootPrivateKey);
+                oos.close();
 
                 ////
                 // Validate client certificate
@@ -63,7 +70,7 @@ public class Teste2 {
                 //Check the chain
                 CertificateFactory cf = CertificateFactory.getInstance("X.509");
                 List mylist = new ArrayList();
-                mylist.add(fakeCertificate);
+                mylist.add(topCertificate);
                 CertPath cp = cf.generateCertPath(mylist);
 
                 TrustAnchor anchor = new TrustAnchor(rootCertificate, null);
@@ -76,17 +83,17 @@ public class Teste2 {
                 System.out.println("\n\n\n\n\n\n\n\n\n\n\n" + pkixCertPathValidatorResult);
             }
 
-            // System.out.println(Arrays.toString(chain));
-        }catch(Exception ex){
+        }catch (Exception ex) {
             ex.printStackTrace();
         }
     }
+
     public static String certToString(X509Certificate cert) {
         StringWriter sw = new StringWriter();
         try {
-            sw.write("-----BEGIN CERTIFICATE-----\n");
+            // sw.write("-----BEGIN CERTIFICATE-----\n")
             sw.write(DatatypeConverter.printBase64Binary(cert.getEncoded()).replaceAll("(.{64})", "$1\n"));
-            sw.write("\n-----END CERTIFICATE-----\n");
+            // sw.write("\n-----END CERTIFICATE-----\n");
         } catch (CertificateEncodingException e) {
             e.printStackTrace();
         }
