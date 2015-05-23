@@ -1,7 +1,6 @@
 import javax.crypto.SecretKey;
 import java.io.Serializable;
 import java.security.Key;
-import java.security.cert.Certificate;
 
 /**
  * Created by paulo on 22-05-2015.
@@ -14,14 +13,23 @@ public class Message implements Serializable{
 
     public Message(Key pubKey) {
         this.pubKey = pubKey;
+        this.timestamp = System.currentTimeMillis();
     }
 
     /*public Message(Certificate ..., SecretKey sKey) {
         this.sKey = sKey;
     }*/
 
-    public Message(String message, long timestamp) {
+    public Message(String message) {
         this.message = message;
-        this.timestamp = timestamp;
+        this.timestamp = System.currentTimeMillis();
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public long getTimestamp() {
+        return timestamp;
     }
 }

@@ -8,9 +8,10 @@ public class ChatClient implements Runnable
 {  
     private Socket socket              = null;
     private Thread thread              = null;
-    private DataInputStream  console   = null;
-    private DataOutputStream streamOut = null;
+    private Scanner console            = null;
+    private ObjectOutputStream streamOut = null;
     private ChatClientThread client    = null;
+
 
     public ChatClient(String serverName, int serverPort)
     {  
@@ -44,9 +45,9 @@ public class ChatClient implements Runnable
        {
 
            try
-           {  
+           {
                // Sends message from console to server
-               streamOut.writeUTF(console.readLine());
+               streamOut.writeObject(new Message(console.nextLine()));
                streamOut.flush();
            }
          
@@ -61,8 +62,18 @@ public class ChatClient implements Runnable
     }
     
     
-    public void handle(String msg)
-    {  
+    public void handle(Message msg_class)
+    {
+        String msg = msg_class.getMessage();
+        long timestamp = msg_class.getTimestamp();
+
+        long toleranceTime = 10;
+        if ((System.currentTimeMillis() - timestamp) / 1000 > toleranceTime) {
+            // Leaving, risk of replicated message
+            System.out.println("Detected Risk of replicated message\nExiting...Please press RETURN to exit ...");
+            stop();
+        }
+
         // Receives message from server
         if (msg.equals(".quit"))
         {  
@@ -78,12 +89,13 @@ public class ChatClient implements Runnable
     // Inits new client thread
     public void start() throws IOException
     {  
-        console   = new DataInputStream(System.in);
-        streamOut = new DataOutputStream(socket.getOutputStream());
+        console   = new Scanner(System.in);
+        streamOut = new ObjectOutputStream(socket.getOutputStream());
+
         if (thread == null)
-        {  
+        {
             client = new ChatClientThread(this, socket);
-            thread = new Thread(this);                   
+            thread = new Thread(this);
             thread.start();
         }
     }
@@ -124,21 +136,21 @@ class ChatClientThread extends Thread
 {  
     private Socket           socket   = null;
     private ChatClient       client   = null;
-    private DataInputStream  streamIn = null;
+    private ObjectInputStream  streamIn = null;
 
     public ChatClientThread(ChatClient _client, Socket _socket)
     {  
         client   = _client;
         socket   = _socket;
-        open();  
+        open();
         start();
     }
    
     public void open()
     {  
         try
-        {  
-            streamIn  = new DataInputStream(socket.getInputStream());
+        {
+            streamIn  = new ObjectInputStream(socket.getInputStream());
         }
         catch(IOException ioe)
         {  
@@ -165,12 +177,14 @@ class ChatClientThread extends Thread
         while (!isInterrupted())
         {   try
             {  
-                client.handle(streamIn.readUTF());
+                client.handle((Message) streamIn.readObject());
             }
             catch(IOException ioe)
             {  
                 System.out.println("Listening error: " + ioe.getMessage());
                 client.stop();
+            } catch (ClassNotFoundException e) {
+                e.printStackTrace();
             }
         }
     }

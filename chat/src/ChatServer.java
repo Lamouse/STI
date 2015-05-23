@@ -15,7 +15,7 @@ public class ChatServer implements Runnable
 		try
       		{  
             		// Binds to port and starts server
-			System.out.println("Binding to port " + port);
+					System.out.println("Binding to port " + port);
             		server_socket = new ServerSocket(port);  
             		System.out.println("Server started: " + server_socket);
             		start();
@@ -73,8 +73,26 @@ public class ChatServer implements Runnable
         	return -1;
     	}
     
-    	public synchronized void handle(int ID, String input)
-    	{  
+    	public synchronized void handle(int ID, Message msg)
+    	{
+			String input = msg.getMessage();
+
+			long timestamp = msg.getTimestamp();
+
+			long toleranceTime = 10;
+			if ((System.currentTimeMillis() - timestamp) / 1000 > toleranceTime) {
+				// Leaving, risk of replicated message
+				System.out.println("Detected Risk of replicated message");
+				int leaving_id = findClient(ID);
+				// Client exits
+				clients[leaving_id].send(".quit");
+				// Notify remaing users
+				for (int i = 0; i < clientCount; i++)
+					if (i!=leaving_id)
+						clients[i].send("Client " +ID + " exits..");
+				remove(ID);
+			}
+
         	if (input.equals(".quit"))
             	{  
                 	int leaving_id = findClient(ID);
@@ -161,8 +179,8 @@ class ChatServerThread extends Thread
     private ChatServer       server    = null;
     private Socket           socket    = null;
     private int              ID        = -1;
-    private DataInputStream  streamIn  =  null;
-    private DataOutputStream streamOut = null;
+    private ObjectInputStream  streamIn  =  null;
+    private ObjectOutputStream streamOut = null;
 
    
     public ChatServerThread(ChatServer _server, Socket _socket)
@@ -178,7 +196,7 @@ class ChatServerThread extends Thread
     {   
         try
         {  
-            streamOut.writeUTF(msg);
+            streamOut.writeObject(new Message(msg));
             streamOut.flush();
         }
        
@@ -202,10 +220,10 @@ class ChatServerThread extends Thread
         System.out.println("Server Thread " + ID + " running.");
       
         while (!isInterrupted())
-        {  
-            try
-            {  
-                server.handle(ID, streamIn.readUTF());
+        {
+			try
+            {
+				server.handle(ID, (Message) streamIn.readObject());
             }
          
             catch(IOException ioe)
@@ -213,17 +231,23 @@ class ChatServerThread extends Thread
                 System.out.println(ID + " ERROR reading: " + ioe.getMessage());
                 server.remove(ID);
 				interrupt();
-            }
-        }
+            } catch (ClassNotFoundException e) {
+				e.printStackTrace();
+			}
+		}
     }
     
     // Opens thread
     public void open() throws IOException
-    {  
-        streamIn = new DataInputStream(new 
+    {
+		/*
+		streamIn = new ObjectInputStream(new
                         BufferedInputStream(socket.getInputStream()));
-        streamOut = new DataOutputStream(new
+        streamOut = new ObjectOutputStream(new
                         BufferedOutputStream(socket.getOutputStream()));
+		*/
+		streamIn = new ObjectInputStream(socket.getInputStream());
+		streamOut = new ObjectOutputStream(socket.getOutputStream());
     }
     
     // Closes thread
