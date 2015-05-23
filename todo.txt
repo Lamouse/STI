@@ -1,0 +1,30 @@
+
+
+
+- criar script que arranca o servidor e depois arranca 3 clientes
+
+
+
+- definir um security mnodel
+
+--- security procedures para o security model
+
+usar Java Secure Socket Extension ( HTTPS over SSL/TLS )
+
+------ Confidentiality: Usar a Java Criptography Algorithm (JCA) para gerar chaves simétricas e partilhar entre o servidor e cada cliente
+
+------ Authenticity: username & password. Só os users reconhecidos pelo servidor se podem ligar.
+
+------ Integrity: Além da confidencialidade uma Checksum é pedida ao Servidor. Checksum é feita do lado do cliente. Têm de corresponder.
+
+------ Non-repudiation: Todas as mensagens levam um timestamp e a assinatura do sender (usar JCA signatures)
+
+------ Key management: O servidor tem um keychain com a chave simétrica que atribuiu a cada cliente. A cada 100 mensagens ou 5 minutos de uptime, o servidor muda a chave simétrica que atribuiu a cada utilizador e repartilha-a.
+---------- o servidor efectua a mudança de chave do lado do cliente, não o contrário
+
+------ Secure management of confidential information: Todas as mensagens são guardadas pelo servidor usando um algoritmo de encriptação mais forte.
+
+
+
+--- escolher cryptographic algorithms employed
+------ 
