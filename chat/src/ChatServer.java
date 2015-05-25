@@ -1,4 +1,5 @@
 
+import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import java.net.*;
 import java.io.*;
@@ -17,6 +18,7 @@ public class ChatServer implements Runnable
 	protected KeyPair rsa_key_pair		    = null;
 	protected KeyPair sig_key_pair		    = null;
 	protected X509Certificate serverCertificate = null;
+	protected int max_key_used				= 30;
 
 	public ChatServer(int port) {
 		// creating the RSA keys
@@ -221,9 +223,9 @@ class ChatServerThread extends Thread
     private int              ID        			= -1;
     private ObjectInputStream  streamIn  		=  null;
     private ObjectOutputStream streamOut 		= null;
-	protected boolean init_msg 					= false;
 	private SecretKey secret_key				= null;
 	private PublicKey sig_public_key 			= null;
+	private int secret_count					= 0;
 
    
     public ChatServerThread(ChatServer _server, Socket _socket)
@@ -253,7 +255,7 @@ class ChatServerThread extends Thread
             // finally send his certificate
             streamOut.writeObject(new Message(this.server.serverCertificate, this.server.sig_key_pair.getPublic(), secret_key));
 
-            init_msg = true;
+			secret_count+=2;
         } catch (Exception e1) {
             e1.printStackTrace();
 			interrupt();
@@ -287,18 +289,44 @@ class ChatServerThread extends Thread
 
         CertPathValidator cpv = CertPathValidator.getInstance("PKIX");
         PKIXCertPathValidatorResult pkixCertPathValidatorResult = (PKIXCertPathValidatorResult) cpv.validate(cp, params);
-        System.out.println("Client validate with success:\n" + pkixCertPathValidatorResult + "\n\n\n\n\n");
-
-
+        System.out.println("Client validate with success:\n" + pkixCertPathValidatorResult);
     }
+
+	private void new_secret_key() {
+		KeyGenerator kg;
+		try {
+			kg = KeyGenerator.getInstance("DES");
+			SecretKey temp_key = kg.generateKey();
+
+			try {
+				streamOut.writeObject(new Message(".secretKey", secret_key, temp_key, this.server.sig_key_pair.getPrivate()));
+				streamOut.flush();
+
+				this.secret_key = temp_key;
+				secret_count = 0;
+			} catch (IOException ioexception) {
+				System.out.println(ID + " ERROR sending message: " + ioexception.getMessage());
+				server.remove(ID);
+				interrupt();
+			}
+
+		} catch (NoSuchAlgorithmException e) {
+			e.printStackTrace();
+		}
+	}
 
     // Sends message to client
     public void send(String msg)
     {
-		if (init_msg) {
+		if (true) {
+			if(secret_count > this.server.max_key_used)
+				new_secret_key();
+
 			try {
 				streamOut.writeObject(new Message(msg, secret_key, this.server.sig_key_pair.getPrivate()));
 				streamOut.flush();
+
+				secret_count++;
 			} catch (IOException ioexception) {
 				System.out.println(ID + " ERROR sending message: " + ioexception.getMessage());
 				server.remove(ID);
@@ -320,9 +348,14 @@ class ChatServerThread extends Thread
       
         while (!isInterrupted())
         {
+			if(secret_count > this.server.max_key_used)
+				new_secret_key();
+
 			try
             {
 				server.handle(ID, (Message) streamIn.readObject(), this.secret_key, this.sig_public_key);
+
+				secret_count++;
             }
          
             catch(IOException ioe)

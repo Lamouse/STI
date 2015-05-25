@@ -86,6 +86,31 @@ public class Message implements Serializable{
         msg = null;
     }
 
+    public Message(String message, SecretKey sKey, SecretKey newKey, PrivateKey privKey) {
+        this.msg = new MSG(message, newKey);
+        setSignatureBytes(privKey);
+
+        try {
+            Cipher myCipher = Cipher.getInstance("DES");
+            myCipher.init(Cipher.ENCRYPT_MODE, sKey);
+            msg_data = myCipher.doFinal(toByteArray(msg));
+
+        } catch (IllegalBlockSizeException e) {
+            e.printStackTrace();
+        } catch (BadPaddingException e) {
+            e.printStackTrace();
+        } catch (InvalidKeyException e) {
+            e.printStackTrace();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        } catch (NoSuchPaddingException e) {
+            e.printStackTrace();
+        }
+
+        msg = null;
+    }
+
+
     private byte[] toByteArray(MSG msg) {
         byte[] data = null;
         ByteArrayOutputStream bos = null;
@@ -257,25 +282,6 @@ public class Message implements Serializable{
         return key;
     }
 
-    public void decrypteMessage(PrivateKey rsa_private_key) {
-        Cipher myCipher;
-        try {
-            myCipher = Cipher.getInstance("RSA");
-            myCipher.init(Cipher.DECRYPT_MODE, rsa_private_key);
-            msg = (MSG) toObject(myCipher.doFinal(msg_data));
-        } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
-        } catch (NoSuchPaddingException e) {
-            e.printStackTrace();
-        } catch (IllegalBlockSizeException e) {
-            e.printStackTrace();
-        } catch (BadPaddingException e) {
-            e.printStackTrace();
-        } catch (InvalidKeyException e) {
-            e.printStackTrace();
-        }
-    }
-
     public void decrypteMessage(SecretKey sKey) {
         Cipher myCipher;
         try {
@@ -347,6 +353,12 @@ class MSG implements Serializable{
 
     public MSG(String message) {
         this.message = message;
+        this.timestamp = System.currentTimeMillis();
+    }
+
+    public MSG(String message, SecretKey newKey) {
+        this.message = message;
+        this.sKey = newKey;
         this.timestamp = System.currentTimeMillis();
     }
 }

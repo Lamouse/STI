@@ -1,4 +1,6 @@
 
+import com.sun.org.apache.bcel.internal.generic.RETURN;
+
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import java.net.*;
@@ -95,15 +97,22 @@ public class ChatClient implements Runnable
             // Leaving, risk of replicated message
             System.out.println("Detected Risk of replicated message\nExiting...Please press RETURN to exit ...");
             stop();
+            return;
+        }
+        else if (msg.equals(".secretKey")) {
+            // Changing Key
+            System.out.println("Changing the secret Key ...");
+            sKey = msg_class.getsKey();
+            return;
         }
         else if(!msg_class.checkSignatureBytes(this.server_sigKey)) {
             System.out.println("Integrity of message does not verified\nExiting...Please press RETURN to exit ...");
             stop();
+            return;
         }
 
         // Receives message from server
-        if (msg.equals(".quit"))
-        {  
+        if (msg.equals(".quit")) {
             // Leaving, quit command
             System.out.println("Exiting...Please press RETURN to exit ...");
             stop();
@@ -272,7 +281,7 @@ class ChatClientThread extends Thread
 
         CertPathValidator cpv = CertPathValidator.getInstance("PKIX");
         PKIXCertPathValidatorResult pkixCertPathValidatorResult = (PKIXCertPathValidatorResult) cpv.validate(cp, params);
-        System.out.println("Server validate with success:\n" + pkixCertPathValidatorResult);
+        System.out.println("Server validate with success:\n" + pkixCertPathValidatorResult + "\n\n\n\n\n");
     }
 }
 
