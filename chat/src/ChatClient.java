@@ -1,20 +1,40 @@
 
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
 import java.net.*;
 import java.io.*;
+import java.security.*;
+import java.security.cert.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Scanner;
 
 
 public class ChatClient implements Runnable
 {  
     private Socket socket              = null;
-    private Thread thread              = null;
+    protected Thread thread            = null;
     private Scanner console            = null;
-    private ObjectOutputStream streamOut = null;
+    protected ObjectOutputStream streamOut = null;
     private ChatClientThread client    = null;
-
+    protected SecretKey sKey           = null;
+    protected PublicKey server_pubKey  = null;
+    protected PublicKey server_sigKey  = null;
+    protected KeyPair client_sigKey    = null;
+    protected String cert_path         = null;
 
     public ChatClient(String serverName, int serverPort)
-    {  
+    {
+        // creating keys to the signature
+        try {
+            KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+            kpg.initialize(1024);
+            client_sigKey = kpg.genKeyPair();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+
         System.out.println("Establishing connection to server...");
         
         try
@@ -47,7 +67,7 @@ public class ChatClient implements Runnable
            try
            {
                // Sends message from console to server
-               streamOut.writeObject(new Message(console.nextLine()));
+               streamOut.writeObject(new Message(console.nextLine(), sKey, client_sigKey.getPrivate()));
                streamOut.flush();
            }
          
@@ -61,9 +81,9 @@ public class ChatClient implements Runnable
        }
     }
     
-    
     public void handle(Message msg_class)
     {
+        msg_class.decrypteMessage(sKey);
         String msg = msg_class.getMessage();
         long timestamp = msg_class.getTimestamp();
 
@@ -92,11 +112,13 @@ public class ChatClient implements Runnable
         console   = new Scanner(System.in);
         streamOut = new ObjectOutputStream(socket.getOutputStream());
 
+        System.out.print("Insert the path of your certificate: ");
+        cert_path = console.nextLine();
+
         if (thread == null)
         {
             client = new ChatClientThread(this, socket);
             thread = new Thread(this);
-            thread.start();
         }
     }
     
@@ -173,7 +195,9 @@ class ChatClientThread extends Thread
     }
     
     public void run()
-    {  
+    {
+        init_messages();
+
         while (!isInterrupted())
         {   try
             {  
@@ -187,6 +211,62 @@ class ChatClientThread extends Thread
                 e.printStackTrace();
             }
         }
+    }
+
+    public void init_messages() {
+        // received the server public key and the public key to the signature
+        try {
+            Message msg = (Message) streamIn.readObject();
+            this.client.server_pubKey = msg.getKey();
+            this.client.server_sigKey = msg.getPbkey();
+
+            // first send a secret key
+            KeyGenerator kg = KeyGenerator.getInstance("DES");
+            this.client.sKey = kg.generateKey();
+            this.client.streamOut.writeObject(new Message(this.client.sKey, this.client.server_pubKey));
+            this.client.streamOut.flush();
+
+            // then send the certificate and the public key to the signature
+            ObjectInputStream objectInputStream = new ObjectInputStream(new FileInputStream(this.client.cert_path));
+            X509Certificate clienteCertificate = (X509Certificate) objectInputStream.readObject();
+            this.client.streamOut.writeObject(new Message(clienteCertificate, this.client.client_sigKey.getPublic(), this.client.sKey));
+            objectInputStream.close();
+
+            // finally received the certificate from the server
+            msg = (Message) streamIn.readObject();
+            msg.decrypteMessage(this.client.sKey);
+            System.out.print(msg.getCertificate() == null);
+            verifyCertificate(msg.getCertificate());
+        }catch (Exception e1){
+            e1.printStackTrace();
+            client.stop();
+            return;
+        }
+
+        this.client.thread.start();
+    }
+
+    public void verifyCertificate(X509Certificate cliente_certificate) throws IOException, ClassNotFoundException, CertificateException, InvalidAlgorithmParameterException, NoSuchAlgorithmException, CertPathValidatorException {
+        ObjectInputStream objectInputStream = new ObjectInputStream(new FileInputStream("rootCertificate.ser"));
+        X509Certificate rootCertificate = (X509Certificate) objectInputStream.readObject();
+        objectInputStream.close();
+        objectInputStream = new ObjectInputStream(new FileInputStream("rootPrivateKey.ser"));
+        PrivateKey rootPrivateKey = (PrivateKey) objectInputStream.readObject();
+        objectInputStream.close();
+
+        //Check the chain
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        List mylist = new ArrayList();
+        mylist.add(cliente_certificate);
+        CertPath cp = cf.generateCertPath(mylist);
+
+        TrustAnchor anchor = new TrustAnchor(rootCertificate, null);
+        PKIXParameters params = new PKIXParameters(Collections.singleton(anchor));
+        params.setRevocationEnabled(false);
+
+        CertPathValidator cpv = CertPathValidator.getInstance("PKIX");
+        PKIXCertPathValidatorResult pkixCertPathValidatorResult = (PKIXCertPathValidatorResult) cpv.validate(cp, params);
+        System.out.println("Server validate with success:\n" + pkixCertPathValidatorResult);
     }
 }
 

@@ -72,12 +72,12 @@ public class Teste {
             SecureRandom random = new SecureRandom();
             KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
 
-            generator.initialize(2048, random);
+            generator.initialize(2048);
             KeyPair pair = generator.generateKeyPair();
             Key pubKey = pair.getPublic();
             Key privKey = pair.getPrivate();
 
-            cipher.init(Cipher.ENCRYPT_MODE, pubKey, random);
+            cipher.init(Cipher.ENCRYPT_MODE, pubKey);
 
             byte[] cipherText1 = cipher.doFinal(testdata);
             System.out.println("cipher: " + new String(cipherText1));
