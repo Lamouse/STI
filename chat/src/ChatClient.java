@@ -85,12 +85,19 @@ public class ChatClient implements Runnable
     {
         msg_class.decrypteMessage(sKey);
         String msg = msg_class.getMessage();
+
+        // System.out.println("Check signature of server: " + msg_class.checkSignatureBytes(this.server_sigKey));
+
         long timestamp = msg_class.getTimestamp();
 
         long toleranceTime = 10;
         if ((System.currentTimeMillis() - timestamp) / 1000 > toleranceTime) {
             // Leaving, risk of replicated message
             System.out.println("Detected Risk of replicated message\nExiting...Please press RETURN to exit ...");
+            stop();
+        }
+        else if(!msg_class.checkSignatureBytes(this.server_sigKey)) {
+            System.out.println("Integrity of message does not verified\nExiting...Please press RETURN to exit ...");
             stop();
         }
 
@@ -235,7 +242,6 @@ class ChatClientThread extends Thread
             // finally received the certificate from the server
             msg = (Message) streamIn.readObject();
             msg.decrypteMessage(this.client.sKey);
-            System.out.print(msg.getCertificate() == null);
             verifyCertificate(msg.getCertificate());
         }catch (Exception e1){
             e1.printStackTrace();
@@ -250,9 +256,9 @@ class ChatClientThread extends Thread
         ObjectInputStream objectInputStream = new ObjectInputStream(new FileInputStream("rootCertificate.ser"));
         X509Certificate rootCertificate = (X509Certificate) objectInputStream.readObject();
         objectInputStream.close();
-        objectInputStream = new ObjectInputStream(new FileInputStream("rootPrivateKey.ser"));
-        PrivateKey rootPrivateKey = (PrivateKey) objectInputStream.readObject();
-        objectInputStream.close();
+        // objectInputStream = new ObjectInputStream(new FileInputStream("rootPrivateKey.ser"));
+        // PrivateKey rootPrivateKey = (PrivateKey) objectInputStream.readObject();
+        // objectInputStream.close();
 
         //Check the chain
         CertificateFactory cf = CertificateFactory.getInstance("X.509");

@@ -4,9 +4,7 @@ import java.io.*;
 import java.security.*;
 import java.security.cert.X509Certificate;
 
-/**
- * Created by paulo on 22-05-2015.
- */
+
 public class Message implements Serializable{
     private MSG msg                 = null;
     byte[] msg_data                 = null;
@@ -19,7 +17,7 @@ public class Message implements Serializable{
 
     // encriptado mas n assinado
     public Message(SecretKey sKey, PublicKey rsa_public_key) {
-        Cipher cipher = null;
+        Cipher cipher;
         try {
             cipher = Cipher.getInstance("RSA");
             cipher.init(Cipher.ENCRYPT_MODE, rsa_public_key);
@@ -95,7 +93,7 @@ public class Message implements Serializable{
         try {
             bos = new ByteArrayOutputStream();
             oos = new ObjectOutputStream(bos);
-            oos.writeObject(this.msg);
+            oos.writeObject(msg);
             oos.flush();
             data = bos.toByteArray();
 
@@ -152,7 +150,7 @@ public class Message implements Serializable{
     }
 
     public void setSignatureBytes(PrivateKey privKey) {
-        byte[] data = null;
+        byte[] data;
         ByteArrayOutputStream bos = null;
         ObjectOutputStream oos = null;
         try {
@@ -194,7 +192,7 @@ public class Message implements Serializable{
     }
 
     public boolean checkSignatureBytes(PublicKey publKey) {
-        byte[] data = null;
+        byte[] data;
         ByteArrayOutputStream bos = null;
         ObjectOutputStream oos = null;
         try {
@@ -238,7 +236,7 @@ public class Message implements Serializable{
     }
 
     public SecretKey decrypteSecretMessage(PrivateKey rsa_private_key) {
-        Cipher myCipher = null;
+        Cipher myCipher;
         SecretKey key = null;
         try {
             myCipher = Cipher.getInstance("RSA");
@@ -260,7 +258,7 @@ public class Message implements Serializable{
     }
 
     public void decrypteMessage(PrivateKey rsa_private_key) {
-        Cipher myCipher = null;
+        Cipher myCipher;
         try {
             myCipher = Cipher.getInstance("RSA");
             myCipher.init(Cipher.DECRYPT_MODE, rsa_private_key);
@@ -279,7 +277,7 @@ public class Message implements Serializable{
     }
 
     public void decrypteMessage(SecretKey sKey) {
-        Cipher myCipher = null;
+        Cipher myCipher;
         try {
             myCipher = Cipher.getInstance("DES");
             myCipher.init(Cipher.DECRYPT_MODE, sKey);
@@ -343,6 +341,7 @@ class MSG implements Serializable{
 
     public MSG(X509Certificate certificate, PublicKey pbkey) {
         this.certificate = certificate;
+        this.pbkey = pbkey;
         this.timestamp = System.currentTimeMillis();
     }
 

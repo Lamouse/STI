@@ -1,2 +1,0 @@
-javac CreateCertificates.java
-java CreateCertificates localhost 5000

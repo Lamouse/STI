@@ -7,9 +7,7 @@ import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.util.Scanner;
 
-/**
- * Created by paulo on 22-05-2015.
- */
+
 public class CreateCertificates {
 
     public static void main(String[] args){
@@ -22,7 +20,7 @@ public class CreateCertificates {
 
         System.out.println("Creating new certificate to a client...");
 
-        ObjectInputStream objectInputStream = null;
+        ObjectInputStream objectInputStream;
         try {
             objectInputStream = new ObjectInputStream(new FileInputStream("rootCertificate.ser"));
             X509Certificate rootCertificate = (X509Certificate) objectInputStream.readObject();
@@ -41,7 +39,7 @@ public class CreateCertificates {
             File client_file = File.createTempFile("client", ".ser");
             FileOutputStream fout = new FileOutputStream(client_file);
             ObjectOutputStream oos = new ObjectOutputStream(fout);
-            oos.writeObject(rootCertificate);
+            oos.writeObject(clientCertificate);
             oos.close();
 
             System.out.println("Certificate created in the following path:\n" + client_file.getAbsoluteFile());

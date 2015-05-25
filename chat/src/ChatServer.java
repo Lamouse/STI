@@ -1,6 +1,4 @@
 
-import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import java.net.*;
 import java.io.*;
@@ -9,8 +7,6 @@ import java.security.cert.*;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Scanner;
-
 
 public class ChatServer implements Runnable
 {  
@@ -20,14 +16,12 @@ public class ChatServer implements Runnable
 	private int clientCount					= 0;
 	protected KeyPair rsa_key_pair		    = null;
 	protected KeyPair sig_key_pair		    = null;
-    private String cert_path                = null;
-    protected X509Certificate serverCertificate = null;
+	protected X509Certificate serverCertificate = null;
 
 	public ChatServer(int port) {
 		// creating the RSA keys
 		try {
-			KeyPairGenerator generator = null;
-			generator = KeyPairGenerator.getInstance("RSA");
+			KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");
 			generator.initialize(2048);
 			rsa_key_pair = generator.generateKeyPair();
 		} catch (NoSuchAlgorithmException e) {
@@ -44,11 +38,9 @@ public class ChatServer implements Runnable
 		}
 
         // load certificate
-        Scanner console = new Scanner(System.in);
-        System.out.print("Insert the path of your certificate: ");
-        cert_path = console.nextLine();
         try {
-            ObjectInputStream objectInputStream = new ObjectInputStream(new FileInputStream(cert_path));
+			String cert_path = "serverCertificate.ser";
+			ObjectInputStream objectInputStream = new ObjectInputStream(new FileInputStream(cert_path));
             serverCertificate = (X509Certificate) objectInputStream.readObject();
         } catch (IOException e) {
             e.printStackTrace();
@@ -120,12 +112,12 @@ public class ChatServer implements Runnable
     
     	public synchronized void handle(int ID, Message msg, SecretKey sKey, PublicKey client_sigKey)
     	{
-			msg.decrypteMessage(sKey);
-			System.out.println("Check signature:\n" + msg.checkSignatureBytes(client_sigKey));
+			boolean exit_now = false;
 
+			msg.decrypteMessage(sKey);
+			// System.out.println("Check signature of Client " + ID + " : " + msg.checkSignatureBytes(client_sigKey));
 
 			String input = msg.getMessage();
-
 
 			long timestamp = msg.getTimestamp();
 
@@ -133,17 +125,14 @@ public class ChatServer implements Runnable
 			if ((System.currentTimeMillis() - timestamp) / 1000 > toleranceTime) {
 				// Leaving, risk of replicated message
 				System.out.println("Detected Risk of replicated message");
-				int leaving_id = findClient(ID);
-				// Client exits
-				clients[leaving_id].send(".quit");
-				// Notify remaing users
-				for (int i = 0; i < clientCount; i++)
-					if (i!=leaving_id)
-						clients[i].send("Client " +ID + " exits..");
-				remove(ID);
+				exit_now = true;
+			}
+			else if (!msg.checkSignatureBytes(client_sigKey)){
+				System.out.println("Integrity of message does not verified");
+				exit_now = true;
 			}
 
-        	if (input.equals(".quit"))
+        	if (input.equals(".quit") || exit_now)
             	{  
                 	int leaving_id = findClient(ID);
                 	// Client exits
@@ -267,7 +256,14 @@ class ChatServerThread extends Thread
             init_msg = true;
         } catch (Exception e1) {
             e1.printStackTrace();
-            this.server.remove(ID);
+			interrupt();
+			try {
+				streamIn.close();
+				streamOut.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+
         }
 	}
 
@@ -275,9 +271,9 @@ class ChatServerThread extends Thread
         ObjectInputStream objectInputStream = new ObjectInputStream(new FileInputStream("rootCertificate.ser"));
         X509Certificate rootCertificate = (X509Certificate) objectInputStream.readObject();
         objectInputStream.close();
-        objectInputStream = new ObjectInputStream(new FileInputStream("rootPrivateKey.ser"));
-        PrivateKey rootPrivateKey = (PrivateKey) objectInputStream.readObject();
-        objectInputStream.close();
+        // objectInputStream = new ObjectInputStream(new FileInputStream("rootPrivateKey.ser"));
+        // PrivateKey rootPrivateKey = (PrivateKey) objectInputStream.readObject();
+        // objectInputStream.close();
 
         //Check the chain
         CertificateFactory cf = CertificateFactory.getInstance("X.509");
@@ -291,7 +287,7 @@ class ChatServerThread extends Thread
 
         CertPathValidator cpv = CertPathValidator.getInstance("PKIX");
         PKIXCertPathValidatorResult pkixCertPathValidatorResult = (PKIXCertPathValidatorResult) cpv.validate(cp, params);
-        System.out.println("Client validate with success:\n" + pkixCertPathValidatorResult);
+        System.out.println("Client validate with success:\n" + pkixCertPathValidatorResult + "\n\n\n\n\n");
 
 
     }
