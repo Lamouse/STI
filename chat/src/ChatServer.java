@@ -18,7 +18,7 @@ public class ChatServer implements Runnable
 	protected KeyPair rsa_key_pair		    = null;
 	protected KeyPair sig_key_pair		    = null;
 	protected X509Certificate serverCertificate = null;
-	protected int max_key_used				= 30;
+	protected int max_key_used				= 10;
 
 	public ChatServer(int port) {
 		// creating the RSA keys
@@ -134,6 +134,13 @@ public class ChatServer implements Runnable
 				exit_now = true;
 			}
 
+			if  (input.equals(".changed")) {
+				int clt = findClient(ID);
+				this.clients[clt].send(".changed");
+				this.clients[clt].secret_key = this.clients[clt].next_secret_key;
+				this.clients[clt].next_secret_key = null;
+			}
+
         	if (input.equals(".quit") || exit_now)
             	{  
                 	int leaving_id = findClient(ID);
@@ -223,7 +230,8 @@ class ChatServerThread extends Thread
     private int              ID        			= -1;
     private ObjectInputStream  streamIn  		=  null;
     private ObjectOutputStream streamOut 		= null;
-	private SecretKey secret_key				= null;
+	protected SecretKey secret_key				= null;
+	protected SecretKey next_secret_key			= null;
 	private PublicKey sig_public_key 			= null;
 	private int secret_count					= 0;
 
@@ -302,7 +310,7 @@ class ChatServerThread extends Thread
 				streamOut.writeObject(new Message(".secretKey", secret_key, temp_key, this.server.sig_key_pair.getPrivate()));
 				streamOut.flush();
 
-				this.secret_key = temp_key;
+				this.next_secret_key = temp_key;
 				secret_count = 0;
 			} catch (IOException ioexception) {
 				System.out.println(ID + " ERROR sending message: " + ioexception.getMessage());
@@ -318,20 +326,18 @@ class ChatServerThread extends Thread
     // Sends message to client
     public void send(String msg)
     {
-		if (true) {
-			if(secret_count > this.server.max_key_used)
-				new_secret_key();
+		if(secret_count > this.server.max_key_used)
+			new_secret_key();
 
-			try {
-				streamOut.writeObject(new Message(msg, secret_key, this.server.sig_key_pair.getPrivate()));
-				streamOut.flush();
+		try {
+			streamOut.writeObject(new Message(msg, secret_key, this.server.sig_key_pair.getPrivate()));
+			streamOut.flush();
 
-				secret_count++;
-			} catch (IOException ioexception) {
-				System.out.println(ID + " ERROR sending message: " + ioexception.getMessage());
-				server.remove(ID);
-				interrupt();
-			}
+			secret_count++;
+		} catch (IOException ioexception) {
+			System.out.println(ID + " ERROR sending message: " + ioexception.getMessage());
+			server.remove(ID);
+			interrupt();
 		}
     }
 

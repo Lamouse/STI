@@ -21,10 +21,12 @@ public class ChatClient implements Runnable
     protected ObjectOutputStream streamOut = null;
     private ChatClientThread client    = null;
     protected SecretKey sKey           = null;
+    protected SecretKey next_sKey      = null;
     protected PublicKey server_pubKey  = null;
     protected PublicKey server_sigKey  = null;
     protected KeyPair client_sigKey    = null;
     protected String cert_path         = null;
+    protected boolean contin           = true;
 
     public ChatClient(String serverName, int serverPort)
     {
@@ -68,9 +70,12 @@ public class ChatClient implements Runnable
 
            try
            {
+               String msg = console.nextLine();
                // Sends message from console to server
-               streamOut.writeObject(new Message(console.nextLine(), sKey, client_sigKey.getPrivate()));
-               streamOut.flush();
+               if(contin) {
+                   streamOut.writeObject(new Message(msg, sKey, client_sigKey.getPrivate()));
+                   streamOut.flush();
+               }
            }
          
            catch(IOException ioexception)
@@ -102,7 +107,23 @@ public class ChatClient implements Runnable
         else if (msg.equals(".secretKey")) {
             // Changing Key
             System.out.println("Changing the secret Key ...");
-            sKey = msg_class.getsKey();
+            next_sKey = msg_class.getsKey();
+            contin = false;
+            try {
+                streamOut.writeObject(new Message(".changed", sKey, client_sigKey.getPrivate()));
+                streamOut.flush();
+            } catch (IOException e) {
+                e.printStackTrace();
+                System.out.println("Exiting...Please press RETURN to exit ...");
+                stop();
+            }
+
+            return;
+        }
+        else if (msg.equals(".changed")) {
+            this.sKey = this.next_sKey;
+            this.next_sKey = null;
+            contin = true;
             return;
         }
         else if(!msg_class.checkSignatureBytes(this.server_sigKey)) {
